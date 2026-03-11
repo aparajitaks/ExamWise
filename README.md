@@ -1,4 +1,4 @@
-# 📘 ExamWise  
+# ExamWise  
 ### Question Difficulty Analysis System
 
 ExamWise is a Machine Learning–powered web application that analyzes programming questions and predicts their difficulty level based on textual features and answer statistics.
@@ -7,7 +7,7 @@ The system processes raw question data, performs feature engineering, trains a c
 
 ---
 
-## 🚀 Features
+## Features
 
 - Upload Questions, Answers, and Tags datasets
 - Automated data reduction and preprocessing
@@ -19,7 +19,7 @@ The system processes raw question data, performs feature engineering, trains a c
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```bash
 ExamWise
@@ -50,7 +50,7 @@ ExamWise
 
 ---
 
-## ⚙️ Tech Stack
+## Tech Stack
 
 - Python 3.x
 - Pandas
@@ -61,7 +61,7 @@ ExamWise
 
 ---
 
-## 📊 How It Works
+## How It Works
 
 1. User uploads:
    - `Questions.csv`
@@ -86,25 +86,25 @@ ExamWise
 
 ---
 
-## 🖥️ Local Setup
+## Local Setup
 
-### 1️⃣ Clone Repository
+### 1️ Clone Repository
 
 ```bash
 git clone https://github.com/ynakoo/ExamWise.git
 cd ExamWise
-2️⃣ Create Virtual Environment
+2️ Create Virtual Environment
 python3 -m venv venv
 source venv/bin/activate
-3️⃣ Install Dependencies
+3️ Install Dependencies
 pip install -r requirements.txt
-4️⃣ Run Application
+4️ Run Application
 streamlit run app.py
 
 Then open:
 
 http://localhost:8501
-📂 Required Input Files
+ Required Input Files
 
 The application expects three CSV files:
 
@@ -116,7 +116,7 @@ Tags.csv
 
 These files are uploaded via the UI and are not stored in the repository.
 
-📈 Model Output
+ Model Output
 
 The system generates:
 
@@ -128,7 +128,7 @@ Difficulty distribution plots
 
 Hardest question analysis
 
-🧠 Difficulty Labels
+ Difficulty Labels
 
 The model categorizes questions into:
 
@@ -140,7 +140,7 @@ Hard
 
 Based on engagement metrics and textual complexity.
 
-🔒 Git Hygiene
+ Git Hygiene
 
 The following directories are ignored:
 
@@ -152,7 +152,7 @@ __pycache__/
 
 Only source code and essential artifacts are version controlled.
 
-🎯 Future Improvements
+ Future Improvements
 
 Real-time model retraining
 
