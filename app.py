@@ -2,15 +2,29 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
+import numpy as np
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 from scripts.data_reduction import reduce_datasets
 from scripts.feature_engineering import build_model_data
+from scripts.assessment_agent import AssessmentAgent
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 # ---------------------------------
 # Page Configuration
 # ---------------------------------
 st.set_page_config(page_title="ExamWise", layout="wide")
+
+with st.sidebar:
+    st.header("🔑 AI Settings")
+    api_key_input = st.text_input("Gemini API Key", type="password", help="Leave blank if set in environment variable GEMINI_API_KEY")
+    
+agent = AssessmentAgent(api_key=api_key_input)
+
 st.title("ExamWise - Question Difficulty Analysis System")
 
 
@@ -104,6 +118,26 @@ if st.button("Run ML Pipeline"):
     else:
         st.warning("metrics.txt not found in models directory.")
 
+    # Confusion Matrix
+    st.subheader("Confusion Matrix")
+    labels = ["easy", "medium", "hard"]
+    cm = confusion_matrix(df["difficulty_label"], df["predicted_difficulty"], labels=labels)
+    fig_cm, ax_cm = plt.subplots(figsize=(6, 5))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    disp.plot(ax=ax_cm, cmap="Blues")
+    ax_cm.set_title("Confusion Matrix: True vs Predicted Difficulty")
+    st.pyplot(fig_cm)
+
+    # ---------------------------------
+    # 4.5 Student Performance Patterns
+    # ---------------------------------
+    st.header("4.5 Student Performance Patterns Per Question")
+    if os.path.exists("outputs/accuracy_per_question.csv"):
+        perf_df = pd.read_csv("outputs/accuracy_per_question.csv")
+        st.dataframe(perf_df.head(30), use_container_width=True)
+    else:
+        st.info("No per-question performance data available yet.")
+
 
     # ---------------------------------
     # 5. Analytics and Visualizations
@@ -128,3 +162,44 @@ if st.button("Run ML Pipeline"):
         st.subheader("Hardest Questions")
         hardest = pd.read_csv("outputs/hardest_questions.csv")
         st.dataframe(hardest.head(20), use_container_width=True)
+
+# ---------------------------------
+# 6. Agentic Assessment Assistant
+# ---------------------------------
+if os.path.exists("data/processed/processed_questions.csv"):
+    st.header("6. Agentic Assessment Assistant")
+    df_processed = pd.read_csv("data/processed/processed_questions.csv")
+
+    # Data quality warnings for noisy/incomplete data
+    total = len(df_processed)
+    missing_titles = df_processed["Title"].isna().sum()
+    missing_bodies = df_processed["question_body"].isna().sum()
+    if missing_titles > 0 or missing_bodies > 0:
+        st.warning(f"⚠️ Data Quality Notice: {missing_titles} questions have missing titles and {missing_bodies} have missing body text. The agent will handle these gracefully but results may be less precise.")
+    if total < 100:
+        st.warning(f"⚠️ Small dataset detected ({total} questions). Assessment analysis works best with larger samples.")
+
+    if st.button("Generate Assessment Design Report"):
+        if not api_key_input and not os.environ.get("GEMINI_API_KEY"):
+            st.error("Please enter a Gemini API Key in the sidebar or set GEMINI_API_KEY.")
+        else:
+            with st.spinner("Agent is analyzing assessment data..."):
+                report = agent.generate_report(df_processed)
+                st.markdown(report)
+                
+    st.subheader("Automated Question Generation (Extension)")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        topic_input = st.text_input("Enter a weak topic (e.g., 'Dynamic Programming' or 'SQL Joins')")
+    with col2:
+        diff_level = st.selectbox("Select Difficulty", ["Easy", "Medium", "Hard"], index=1)
+        
+    if st.button("Generate Sample Question"):
+        if not topic_input:
+            st.warning("Please enter a topic.")
+        elif not api_key_input and not os.environ.get("GEMINI_API_KEY"):
+            st.error("Please enter a Gemini API Key in the sidebar or set GEMINI_API_KEY.")
+        else:
+            with st.spinner(f"Generating {diff_level} question for '{topic_input}'..."):
+                question = agent.generate_automated_question(topic_input, diff_level)
+                st.markdown(question)
