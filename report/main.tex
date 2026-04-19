@@ -19,7 +19,13 @@
 \usepackage{listings}
 \usepackage{fancyhdr}
 \usepackage{titlesec}
-
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{url}
+\usepackage{natbib}
 
 % ──────────────────────────────────────
 % Styling
@@ -33,7 +39,7 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small ExamWise --- Milestone~1}
+\fancyhead[L]{\small ExamWise --- Final Project Report}
 \fancyhead[R]{\small EPOCH PIONEERS}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -50,7 +56,8 @@
     captionpos=b,
     numbers=left,
     numberstyle=\tiny\color{gray},
-    tabsize=4
+    tabsize=4,
+    showstringspaces=false
 }
 
 % ──────────────────────────────────────
@@ -58,10 +65,10 @@
 % ──────────────────────────────────────
 \title{
     \vspace{-1cm}
-    \textbf{\Large ExamWise: Intelligent Exam Question\\
-    Difficulty Analysis System}\\[0.5em]
-    \large Milestone~1 --- Difficulty Analysis \& Baseline System Setup\\[0.3em]
-    \normalsize Project Report
+    \textbf{\LARGE ExamWise: AI-Driven Educational Analytics}\\[0.3em]
+    \textbf{\LARGE and Assessment Design Assistant}\\[1em]
+    \large Final Project Report --- Milestones 1 \& 2\\[0.3em]
+    \normalsize Agentic AI Systems for Education
 }
 
 \author{
@@ -82,111 +89,251 @@
 
 % ──────────────────────────────────────
 \begin{abstract}
-Traditional examination evaluation methods determine question difficulty only after students have attempted the exam, limiting the ability of educators to design balanced assessments in advance. This project presents \textbf{ExamWise}, a machine learning--based system that analyzes exam-style questions and predicts their difficulty level (\textit{Easy}, \textit{Medium}, \textit{Hard}) using textual features derived from natural language processing techniques. In Milestone~1, we establish the complete data pipeline---from raw Stack Overflow question--answer data to a trained Logistic Regression classifier---achieving an overall accuracy of $65.71\%$. We also build analytical visualizations and a Streamlit-based web interface for interactive exploration. This report documents the methodology, implementation, results, and future directions of the project.
+Designing balanced and pedagogically sound examinations is a persistent challenge in education. Educators typically discover that an exam was poorly calibrated only \emph{after} students have already taken it, when it is too late to adjust. This project presents \textbf{ExamWise}, an end-to-end AI-driven educational analytics platform that addresses this problem in two phases. In \textbf{Milestone~1}, we build a machine learning and natural language processing (NLP) pipeline that ingests question--answer data from Stack Overflow, engineers engagement-based difficulty features, and trains a Logistic Regression classifier to predict question difficulty as \textit{Easy}, \textit{Medium}, or \textit{Hard}. The model achieves $65.71\%$ overall accuracy on the test set. In \textbf{Milestone~2}, we extend the system with an \textbf{Agentic AI Assessment Design Assistant} powered by the Google Gemini large language model (LLM). The agent performs stateful analysis of assessment data, retrieves pedagogical best practices through a synthetic Retrieval-Augmented Generation (RAG) mechanism, generates structured six-section assessment improvement reports, and handles incomplete or noisy data gracefully. As an extension, we implement \textbf{Automated Question Generation}, allowing educators to instantly create new exam questions for identified weak topics. The entire application is built using Streamlit and is publicly deployable on free-tier hosting platforms.
 \end{abstract}
 
 \tableofcontents
 \newpage
 
-% ══════════════════════════════════════
+% ══════════════════════════════════════════════════════════════
+% PART I: INTRODUCTION
+% ══════════════════════════════════════════════════════════════
 \section{Introduction}
 \label{sec:intro}
-% ══════════════════════════════════════
 
-In conventional educational assessment, question difficulty is understood only retrospectively---after students take the exam and scores are aggregated~\cite{lord1980applications}. This reactive paradigm limits instructors who wish to construct well-balanced question papers \emph{before} administration.
+\subsection{Motivation and Problem Statement}
 
-\textbf{ExamWise} addresses this gap by building a predictive system that estimates question difficulty from the question text itself, without requiring prior student performance data. The system leverages supervised machine learning and natural language processing (NLP) to classify questions into three difficulty tiers.
+In conventional educational assessment workflows, question difficulty is understood only \emph{retrospectively}---after students take the exam and aggregate scores are computed \citep{lord1980applications}. This reactive paradigm creates two significant problems:
 
-\subsection{Problem Statement}
-Given a corpus of questions with associated community response behaviour, the objective is to:
 \begin{enumerate}[noitemsep]
-    \item Derive difficulty labels from historical engagement metrics.
-    \item Train a text-based classifier that generalises to unseen questions.
-    \item Provide analytical dashboards for question-level insights.
+    \item \textbf{Poorly balanced exams}: Without prior difficulty estimation, exams may be disproportionately easy or hard, failing to differentiate student abilities effectively.
+    \item \textbf{Missed learning gaps}: Patterns of student struggle on specific topics are only visible after grading, leaving no opportunity for proactive pedagogical intervention.
 \end{enumerate}
 
-\subsection{Scope of Milestone~1}
-Milestone~1 delivers the foundational components:
+\textbf{ExamWise} addresses both problems by building a predictive and generative AI system that:
 \begin{itemize}[noitemsep]
-    \item Data acquisition, reduction, and labelling pipeline.
-    \item Feature extraction using Bag-of-Words vectorisation.
-    \item Baseline Logistic Regression model for multi-class classification.
-    \item Analytical visualisations (difficulty distribution, accuracy analysis, hardest questions).
-    \item Streamlit web application for end-to-end interaction.
+    \item Predicts question difficulty from text \emph{before} the exam is administered.
+    \item Analyzes difficulty distributions and learning gaps \emph{after} an exam to guide future assessment design.
+    \item Generates structured, actionable recommendations grounded in established pedagogical principles.
+    \item Automatically creates new questions for topics identified as weak areas.
 \end{itemize}
 
-% ══════════════════════════════════════
-\section{Literature Review}
-\label{sec:litreview}
-% ══════════════════════════════════════
+\subsection{Scope of This Report}
 
-Automated question difficulty estimation has been explored through several approaches in educational data mining:
+This report documents the complete development of the ExamWise system across two milestones:
 
 \begin{itemize}
-    \item \textbf{Item Response Theory (IRT):} Classical psychometric models estimate item difficulty as a latent parameter from response patterns~\cite{hambleton1991fundamentals}. However, IRT requires observed response data and cannot predict difficulty for new items.
-    
-    \item \textbf{Text-based approaches:} Recent work uses NLP features (readability scores, syntactic complexity, word frequency) to predict difficulty from question text alone~\cite{ha2019automated}. TF--IDF and word embeddings are commonly used representations.
-    
-    \item \textbf{Community Q\&A platforms:} Stack Overflow data has been used as a proxy for educational content, where answer scores and response rates serve as engagement-based difficulty indicators~\cite{anderson2012discovering}.
+    \item \textbf{Milestone~1 (Mid-Semester):} ML-based exam question analytics---data pipeline, feature engineering, supervised classification, model evaluation, and basic Streamlit UI.
+    \item \textbf{Milestone~2 (End-Semester):} Agentic AI Assessment Design Assistant---LLM integration, synthetic RAG, structured report generation, noisy data handling, and automated question generation.
 \end{itemize}
 
-Our approach combines community engagement metrics for label derivation with text-based features for classification, enabling prediction on unseen questions.
+\subsection{Constraints and Requirements}
 
-% ══════════════════════════════════════
+The project was developed under the following constraints:
+\begin{itemize}[noitemsep]
+    \item Team size: 3--4 students.
+    \item \textbf{No paid APIs permitted}---only free-tier APIs or open-source models.
+    \item A user interface is mandatory.
+    \item The final application must be publicly hosted (not localhost-only).
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+% PART II: LITERATURE REVIEW
+% ══════════════════════════════════════════════════════════════
+\section{Literature Review}
+\label{sec:litreview}
+
+\subsection{Automated Question Difficulty Estimation}
+
+The estimation of question difficulty from textual and contextual features has been explored through several complementary approaches in educational data mining and psychometrics.
+
+\subsubsection{Item Response Theory (IRT)}
+Classical psychometric models, particularly Item Response Theory \citep{hambleton1991fundamentals}, estimate item difficulty as a latent parameter from observed student response patterns. The standard three-parameter logistic (3PL) model defines the probability of a correct response as:
+
+\begin{equation}
+    P(\text{correct} \mid \theta) = c + \frac{1 - c}{1 + e^{-a(\theta - b)}}
+    \label{eq:irt}
+\end{equation}
+
+where $\theta$ is the student ability, $b$ is the item difficulty, $a$ is the discrimination parameter, and $c$ is the guessing parameter. While IRT provides rigorous statistical foundations, it \emph{requires observed response data} and cannot predict difficulty for new, untested items.
+
+\subsubsection{Text-Based Approaches}
+Recent work uses NLP features---readability scores, syntactic complexity, word frequency distributions---to predict difficulty from question text alone \citep{ha2019automated}. Common text representations include TF-IDF vectors and pre-trained word embeddings. These approaches enable \emph{a priori} difficulty estimation without requiring student response data.
+
+\subsubsection{Community Q\&A Platforms as Proxies}
+Stack Overflow question--answer data has been used as a proxy for educational content difficulty \citep{anderson2012discovering}. Metrics such as answer scores, response rates, and time-to-first-answer serve as engagement-based difficulty indicators. Our approach follows this paradigm, using community engagement to derive difficulty labels.
+
+\subsection{Large Language Models in Education}
+
+The emergence of large language models (LLMs) has created new possibilities for educational technology. LLMs can generate human-quality text, reason about complex topics, and follow structured output formats \citep{brown2020language}. However, they also carry risks of generating plausible but incorrect information (``hallucination''), which is particularly dangerous in educational contexts where accuracy is paramount.
+
+\subsection{Agentic AI Systems}
+
+Agentic AI refers to systems where an AI model operates with explicit state management, goal-directed reasoning, and the ability to use tools or retrieve information \citep{yao2023react}. Unlike simple prompt-response interactions, agentic workflows maintain conversation state across multiple reasoning steps and can incorporate external knowledge bases. Our Assessment Assistant implements this pattern.
+
+\subsection{Retrieval-Augmented Generation (RAG)}
+
+RAG systems augment LLM generation with retrieved context from external knowledge bases, reducing hallucination and grounding responses in verified information \citep{lewis2020rag}. While full RAG systems use vector stores (e.g., FAISS, Chroma) for semantic retrieval, our system implements a \emph{synthetic RAG} approach where curated pedagogical guidelines are injected directly into the prompt context.
+
+% ══════════════════════════════════════════════════════════════
+% PART III: DATASET
+% ══════════════════════════════════════════════════════════════
 \section{Dataset}
 \label{sec:dataset}
-% ══════════════════════════════════════
 
 \subsection{Data Source}
-We use the \textbf{StackSample} dataset from Kaggle~\cite{stacksample}, which contains a 10\% sample of Stack Overflow questions and answers. The raw dataset comprises:
+
+We use the \textbf{StackSample} dataset from Kaggle \citep{stacksample}, which contains a 10\% random sample of all Stack Overflow questions and answers. The dataset comprises three CSV files:
 
 \begin{table}[H]
 \centering
-\caption{Raw dataset statistics}
+\caption{Raw dataset files and their contents}
 \label{tab:raw-data}
-\begin{tabular}{lrr}
+\begin{tabular}{llrl}
 \toprule
-\textbf{File} & \textbf{Original Rows} & \textbf{Reduced Rows} \\
+\textbf{File} & \textbf{Key Columns} & \textbf{Original Rows} & \textbf{Description} \\
 \midrule
-\texttt{Questions.csv} & $\sim$19.9M & 15{,}000 \\
-\texttt{Answers.csv}   & $\sim$17.7M & 15{,}000 \\
-\texttt{Tags.csv}      & $\sim$1.9M  & 15{,}000 \\
+\texttt{Questions.csv} & Id, Score, Title, Body & $\sim$1.26M & Question text and metadata \\
+\texttt{Answers.csv}   & Id, ParentId, Score    & $\sim$1.39M & Answer text and scores \\
+\texttt{Tags.csv}      & Id, Tag                & $\sim$3.75M & Tags per question \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Data Reduction}
-Due to computational constraints, the dataset is reduced to 15{,}000 rows per file using \texttt{data\_reduction.py}. The reduction preserves referential integrity by:
-\begin{enumerate}[noitemsep]
-    \item Selecting the first 15{,}000 questions.
-    \item Filtering answers whose \texttt{ParentId} matches the selected question IDs.
-    \item Filtering tags corresponding to those question IDs.
-\end{enumerate}
+\subsection{Data Reduction Strategy}
+\label{sec:data-reduction}
 
-\subsection{Difficulty Labelling}
-Since real student response data is unavailable, we use community engagement as a proxy. The \textbf{difficulty score} for each question is computed as:
+Due to memory and computational constraints, the full dataset cannot be processed on standard hardware. We implemented a \textbf{referentially-consistent reduction strategy} in \texttt{scripts/data\_reduction.py} that preserves data integrity:
+
+\begin{algorithm}[H]
+\caption{Referentially-Consistent Data Reduction}
+\label{alg:reduce}
+\begin{algorithmic}[1]
+\REQUIRE Raw CSV files, reduction limit $L = 15{,}000$
+\STATE Read first $L$ rows from \texttt{Questions.csv}
+\STATE Extract question ID set: $\mathcal{Q} = \{q_1, q_2, \ldots, q_L\}$
+\STATE \textbf{Stream} \texttt{Answers.csv} in chunks of 50{,}000 rows
+\FOR{each chunk}
+    \STATE Filter rows where \texttt{ParentId} $\in \mathcal{Q}$
+    \STATE Append filtered rows to answer buffer
+    \IF{buffer size $\geq L$}
+        \STATE \textbf{break}
+    \ENDIF
+\ENDFOR
+\STATE Truncate answer buffer to $L$ rows
+\STATE Repeat streaming process for \texttt{Tags.csv}, filtering on \texttt{Id} $\in \mathcal{Q}$
+\STATE Save reduced files to \texttt{data/reduced/}
+\end{algorithmic}
+\end{algorithm}
+
+The chunked reading approach (line 3) ensures that even the full 1.39M-row \texttt{Answers.csv} file can be processed without loading it entirely into memory.
+
+\subsection{Why Stack Overflow Data?}
+
+Stack Overflow questions serve as a reasonable proxy for exam questions because:
+\begin{itemize}[noitemsep]
+    \item Questions are technical and assessment-like in nature (problem-solving focus).
+    \item Community voting (scores) provides a crowd-sourced quality/difficulty signal.
+    \item The variety of programming topics mirrors the breadth of a computer science curriculum.
+    \item The dataset is freely available, satisfying the no-paid-API constraint.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+% PART IV: METHODOLOGY --- MILESTONE 1
+% ══════════════════════════════════════════════════════════════
+\section{Methodology: Milestone~1 --- ML-Based Analytics}
+\label{sec:methodology-m1}
+
+\subsection{System Architecture Overview}
+
+Figure~\ref{fig:pipeline} illustrates the end-to-end pipeline for Milestone~1.
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\textwidth}{\centering
+\textbf{Milestone~1 Data Flow}\\[1em]
+\texttt{Raw CSVs (Questions, Answers, Tags)}\\[0.3em]
+$\downarrow$ \textit{Data Reduction (15{,}000 rows)}\\[0.3em]
+\texttt{Reduced CSVs}\\[0.3em]
+$\downarrow$ \textit{Feature Engineering}\\[0.3em]
+\texttt{Processed Dataset with Difficulty Labels}\\[0.3em]
+$\downarrow$ \textit{Text Preprocessing + Vectorisation}\\[0.3em]
+\texttt{Bag-of-Words Feature Matrix}\\[0.3em]
+$\downarrow$ \textit{Logistic Regression Training (70/30 Split)}\\[0.3em]
+\texttt{Trained Model + Evaluation Metrics}\\[0.3em]
+$\downarrow$ \textit{Streamlit UI}\\[0.3em]
+\texttt{Interactive Dashboard with Predictions \& Charts}
+}}
+\caption{ExamWise Milestone~1 processing pipeline}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Feature Engineering}
+\label{sec:feature-eng}
+
+The feature engineering module (\texttt{scripts/feature\_engineering.py}) transforms raw question--answer data into a structured dataset with six computed features per question. The process involves three main steps:
+
+\subsubsection{Step 1: Answer Aggregation}
+
+For each question (identified by \texttt{Id}), all associated answers are grouped by \texttt{ParentId}, and the following statistics are computed:
+
+\begin{table}[H]
+\centering
+\caption{Engineered features per question}
+\label{tab:features}
+\begin{tabular}{lll}
+\toprule
+\textbf{Feature} & \textbf{Computation} & \textbf{Intuition} \\
+\midrule
+\texttt{max\_answer\_score}   & $\max(\text{answer scores})$       & Quality of the best answer \\
+\texttt{avg\_answer\_score}   & $\text{mean}(\text{answer scores})$  & Average answer quality \\
+\texttt{answer\_score\_variance} & $\text{var}(\text{answer scores})$ & Disagreement among answers \\
+\texttt{answer\_count}        & Count of answers               & Community interest level \\
+\texttt{question\_score}      & Score from \texttt{Questions.csv}   & Community rating of the question \\
+\texttt{ratio}                & $\frac{\text{max\_answer\_score}}{\text{answer\_count} + 1}$ & Normalised answer quality \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The aggregation uses \texttt{pandas.groupby()} with named aggregation functions. For questions with a single answer, the variance is set to 0 (since variance is undefined for a single observation).
+
+\subsubsection{Step 2: Difficulty Score Computation}
+
+The core difficulty metric is computed as:
 
 \begin{equation}
-    \text{difficulty\_score} = 1 - \frac{\text{max\_answer\_score}}{\text{max\_answer\_score} + \text{answer\_count} + 1}
+    \text{difficulty\_score}_i = 1 - \frac{\text{max\_answer\_score}_i}{\text{max\_answer\_score}_i + \text{answer\_count}_i + 1}
     \label{eq:difficulty}
 \end{equation}
 
-The intuition is that questions with high-scoring answers relative to their answer count are ``easier'' (the community converged on a good solution), while questions with low-scoring or few answers are ``harder''.
+\textbf{Intuition:} A question with a high-scoring answer relative to its number of answers is ``easy''---the community quickly converged on a good solution. Conversely, questions with low-scoring answers or very few responses are ``hard''---the community struggled to provide helpful answers.
 
-After min--max normalisation to $[0,1]$, labels are assigned using fixed thresholds:
+The score is then normalised to $[0, 1]$ using min--max normalisation:
 
 \begin{equation}
-    \text{label} =
+    \text{difficulty\_score}_i^{\text{norm}} = \frac{\text{difficulty\_score}_i - \min(\mathbf{d})}{\max(\mathbf{d}) - \min(\mathbf{d})}
+    \label{eq:minmax}
+\end{equation}
+
+where $\mathbf{d}$ is the vector of all raw difficulty scores. If all scores are identical (edge case), a fallback value of $0.5$ is assigned.
+
+\subsubsection{Step 3: Difficulty Categorisation}
+
+The normalised scores are mapped to three categorical labels using fixed thresholds:
+
+\begin{equation}
+    \text{difficulty\_label}_i =
     \begin{cases}
-        \textit{Easy}   & \text{if } \text{difficulty\_score} < 0.33 \\
-        \textit{Medium} & \text{if } 0.33 \leq \text{difficulty\_score} < 0.66 \\
-        \textit{Hard}   & \text{if } \text{difficulty\_score} \geq 0.66
+        \textit{Easy}   & \text{if } \text{difficulty\_score}_i^{\text{norm}} < 0.33 \\
+        \textit{Medium} & \text{if } 0.33 \leq \text{difficulty\_score}_i^{\text{norm}} < 0.66 \\
+        \textit{Hard}   & \text{if } \text{difficulty\_score}_i^{\text{norm}} \geq 0.66
     \end{cases}
     \label{eq:thresholds}
 \end{equation}
 
 \subsection{Label Distribution}
-The resulting distribution is highly imbalanced (Table~\ref{tab:label-dist}):
+
+The resulting class distribution is significantly imbalanced:
 
 \begin{table}[H]
 \centering
@@ -205,80 +352,68 @@ Easy   &  1{,}528 & 10.2\% \\
 \end{tabular}
 \end{table}
 
-% ══════════════════════════════════════
-\section{Methodology}
-\label{sec:methodology}
-% ══════════════════════════════════════
-
-Figure~\ref{fig:pipeline} illustrates the end-to-end pipeline.
-
-\begin{figure}[H]
-\centering
-\fbox{\parbox{0.85\textwidth}{\centering
-\texttt{Raw CSVs} $\;\xrightarrow{\text{Reduce}}\;$ \texttt{15k subset} $\;\xrightarrow{\text{Feature Eng.}}\;$ \texttt{Labelled Data}\\[0.5em]
-$\;\xrightarrow{\text{Preprocess}}\;$ \texttt{Clean Text} $\;\xrightarrow{\text{Vectorise}}\;$ \texttt{BoW Matrix} $\;\xrightarrow{\text{Train}}\;$ \texttt{LR Model}\\[0.5em]
-$\;\xrightarrow{\text{Evaluate}}\;$ \texttt{Metrics} $\;\xrightarrow{\text{Visualise}}\;$ \texttt{Dashboard}
-}}
-\caption{ExamWise Milestone~1 processing pipeline}
-\label{fig:pipeline}
-\end{figure}
-
-\subsection{Feature Engineering}
-For each question, the following features are computed from the answer data:
-
-\begin{table}[H]
-\centering
-\caption{Engineered features per question}
-\label{tab:features}
-\begin{tabular}{ll}
-\toprule
-\textbf{Feature} & \textbf{Description} \\
-\midrule
-\texttt{max\_answer\_score}       & Highest score among all answers \\
-\texttt{avg\_answer\_score}       & Mean score across all answers \\
-\texttt{answer\_score\_variance}  & Variance of answer scores \\
-\texttt{answer\_count}            & Number of answers received \\
-\texttt{question\_score}          & Community score of the question \\
-\texttt{ratio}                    & $\frac{\text{max\_answer\_score}}{\text{answer\_count} + 1}$ \\
-\bottomrule
-\end{tabular}
-\end{table}
+This imbalance reflects the nature of Stack Overflow: most questions are sufficiently challenging that answers do not receive overwhelmingly high scores.
 
 \subsection{Text Preprocessing}
-The question body undergoes the following transformations:
+
+Before vectorisation, the question text (\texttt{Title} + \texttt{Body}) undergoes four preprocessing steps:
+
 \begin{enumerate}[noitemsep]
-    \item \textbf{HTML stripping:} Removal of HTML tags using regex \texttt{\textless{}[\^{}\textgreater{}]*\textgreater{}}.
-    \item \textbf{Non-alphabetic removal:} Retains only alphabetical characters.
-    \item \textbf{Lowercasing:} Uniform case normalisation.
-    \item \textbf{Stop word removal:} English stop words excluded during vectorisation.
+    \item \textbf{HTML tag removal:} Regex pattern \texttt{<[{\textasciicircum}>]*>} strips all HTML markup from the body text.
+    \item \textbf{Non-alphabetic character removal:} Retains only alphabetical characters, removing code snippets, numbers, and special characters.
+    \item \textbf{Lowercasing:} Converts all text to lowercase for uniform representation.
+    \item \textbf{Stop word removal:} English stop words (``the'', ``is'', ``and'', etc.) are excluded during vectorisation.
 \end{enumerate}
 
 \subsection{Text Vectorisation}
-The cleaned text is transformed into a numerical feature matrix using \texttt{CountVectorizer} (Bag-of-Words) from scikit-learn~\cite{sklearn}, with English stop words removed. Each question is represented as a sparse vector of word counts.
+
+The cleaned text is transformed into a numerical feature matrix using scikit-learn's \texttt{CountVectorizer} (Bag-of-Words model) \citep{sklearn}. Each question is represented as a sparse vector $\mathbf{x}_i \in \mathbb{R}^{|V|}$ where $|V|$ is the vocabulary size. Each element $x_{ij}$ represents the count of word $j$ in question $i$.
 
 \subsection{Classification Model}
-A \textbf{Logistic Regression} classifier is trained on the vectorised text features for multi-class difficulty prediction. The model uses the one-vs-rest (OvR) scheme:
+
+A \textbf{Logistic Regression} classifier is trained for multi-class classification using the softmax (multinomial) formulation:
 
 \begin{equation}
     P(y = k \mid \mathbf{x}) = \frac{e^{\mathbf{w}_k^\top \mathbf{x} + b_k}}{\sum_{j=1}^{K} e^{\mathbf{w}_j^\top \mathbf{x} + b_j}}
     \label{eq:softmax}
 \end{equation}
 
-where $\mathbf{x}$ is the BoW feature vector, $\mathbf{w}_k$ and $b_k$ are the weight and bias for class $k$, and $K = 3$ (Easy, Medium, Hard).
+where:
+\begin{itemize}[noitemsep]
+    \item $\mathbf{x} \in \mathbb{R}^{|V|}$ is the BoW feature vector for a question.
+    \item $\mathbf{w}_k \in \mathbb{R}^{|V|}$ is the learned weight vector for class $k$.
+    \item $b_k \in \mathbb{R}$ is the bias term for class $k$.
+    \item $K = 3$ corresponds to the three classes: Easy, Medium, Hard.
+\end{itemize}
+
+The model is trained using L2 regularisation to prevent overfitting on the high-dimensional sparse feature space. The trained model and vectoriser are serialised using \texttt{joblib} \citep{joblib} for deployment.
 
 \subsection{Train--Test Split}
+
 The dataset is split into 70\% training and 30\% testing:
 \begin{itemize}[noitemsep]
     \item Training set: 10{,}500 samples
     \item Test set: 4{,}500 samples
 \end{itemize}
 
-% ══════════════════════════════════════
-\section{Results}
-\label{sec:results}
-% ══════════════════════════════════════
+\subsection{Model Persistence}
 
-\subsection{Model Performance}
+Three artifacts are persisted to the \texttt{models/} directory:
+\begin{itemize}[noitemsep]
+    \item \texttt{model.joblib} (758~KB) --- The trained Logistic Regression classifier.
+    \item \texttt{vectorizer.joblib} (447~KB) --- The fitted CountVectorizer with learned vocabulary.
+    \item \texttt{metrics.txt} --- The full classification report including per-class precision, recall, and F1.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+% PART V: RESULTS --- MILESTONE 1
+% ══════════════════════════════════════════════════════════════
+\section{Results: Milestone~1}
+\label{sec:results-m1}
+
+\subsection{Classification Performance}
+
+Table~\ref{tab:metrics} presents the full classification report on the test set.
 
 \begin{table}[H]
 \centering
@@ -292,54 +427,60 @@ Easy   & 0.14 & 0.10 & 0.12 & 473  \\
 Medium & 0.20 & 0.15 & 0.17 & 643  \\
 Hard   & 0.76 & 0.83 & 0.80 & 3{,}384 \\
 \midrule
-\textbf{Accuracy}     & \multicolumn{4}{c}{$\mathbf{0.6571}$ (65.71\%)} \\
-\textbf{Macro Avg}    & 0.37 & 0.36 & 0.36 & 4{,}500 \\
-\textbf{Weighted Avg} & 0.62 & 0.66 & 0.64 & 4{,}500 \\
+\textbf{Overall Accuracy}     & \multicolumn{4}{c}{$\mathbf{0.6571}$ (65.71\%)} \\
+\textbf{Macro Average}    & 0.37 & 0.36 & 0.36 & 4{,}500 \\
+\textbf{Weighted Average} & 0.62 & 0.66 & 0.64 & 4{,}500 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\subsection{Analysis of Results}
+
 \textbf{Key observations:}
-\begin{itemize}[noitemsep]
-    \item The model achieves $65.71\%$ overall accuracy, driven largely by correct predictions on the majority class (\textit{Hard}).
-    \item The \textit{Easy} class has an F1-score of only $0.12$, indicating the model struggles severely with minority classes.
-    \item The macro-averaged F1 of $0.36$ reveals that per-class performance is not balanced.
-    \item The class imbalance (75\% \textit{Hard}) is the primary cause of poor minority-class performance.
-\end{itemize}
+\begin{enumerate}
+    \item \textbf{Majority class dominance:} The model achieves $65.71\%$ accuracy primarily by correctly classifying \textit{Hard} questions (83\% recall for the class comprising 75.2\% of test data).
+    
+    \item \textbf{Minority class struggle:} The \textit{Easy} class achieves only 10\% recall and 14\% precision, meaning the model fails to identify most easy questions. This is a direct consequence of having only 473 easy questions in the test set (10.5\%).
+    
+    \item \textbf{Macro vs.\ weighted metrics:} The macro-averaged F1 of 0.36 (treating all classes equally) is significantly lower than the weighted-averaged F1 of 0.64 (accounting for class prevalence), confirming that performance is driven by the majority class.
+    
+    \item \textbf{Confusion Matrix interpretation:} The confusion matrix (Figure~\ref{fig:cm}) reveals that most \textit{Easy} and \textit{Medium} questions are misclassified as \textit{Hard}, consistent with the class imbalance.
+\end{enumerate}
 
 \subsection{Visualisations}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{figures/difficulty_distribution.png}
-    \caption{Distribution of difficulty labels across the processed dataset. The dataset is heavily skewed towards \textit{Hard} questions (75.2\%).}
+    \includegraphics[width=0.75\textwidth]{figures/difficulty_distribution.png}
+    \caption{Distribution of difficulty labels across the processed dataset. The heavy skew towards \textit{Hard} (75.2\%) reflects the challenging nature of Stack Overflow questions and directly impacts classifier performance.}
     \label{fig:diff-dist}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{figures/accuracy_distribution.png}
-    \caption{Distribution of the accuracy proxy metric ($\text{ratio} = \frac{\text{max\_answer\_score}}{\text{answer\_count} + 1}$). The distribution is right-skewed, with most questions concentrated near zero.}
+    \includegraphics[width=0.75\textwidth]{figures/accuracy_distribution.png}
+    \caption{Distribution of the accuracy proxy metric ($\text{ratio} = \frac{\text{max\_answer\_score}}{\text{answer\_count} + 1}$). The right-skewed distribution shows that most questions have low ratios, indicating that high-quality answers are relatively rare.}
     \label{fig:acc-dist}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{figures/difficulty_distribution_bar.png}
-    \caption{Bar chart showing the distribution of questions across difficulty categories.}
+    \includegraphics[width=0.75\textwidth]{figures/difficulty_distribution_bar.png}
+    \caption{Bar chart of question counts per difficulty category, clearly showing the three-to-one ratio between Hard and the combined Easy+Medium classes.}
     \label{fig:diff-bar}
 \end{figure}
 
 \subsection{Hardest Questions Analysis}
-Table~\ref{tab:hardest} presents a sample of the most difficult questions identified by the system (lowest accuracy scores).
+
+Table~\ref{tab:hardest} presents a sample of the most difficult questions identified by the system (those with the lowest accuracy proxy scores):
 
 \begin{table}[H]
 \centering
-\caption{Top 5 hardest questions (lowest accuracy proxy score)}
+\caption{Top 5 hardest questions identified by the system}
 \label{tab:hardest}
 \begin{tabular}{clr}
 \toprule
-\textbf{ID} & \textbf{Title (Truncated)} & \textbf{Score} \\
+\textbf{Question ID} & \textbf{Title (Truncated)} & \textbf{Score} \\
 \midrule
 688245 & Is there a better Python bundle for TextMate\ldots & $-17.0$ \\
 183042 & How can I use UUIDs in SQLAlchemy?             & $-15.0$ \\
@@ -350,169 +491,426 @@ Table~\ref{tab:hardest} presents a sample of the most difficult questions identi
 \end{tabular}
 \end{table}
 
-% ══════════════════════════════════════
-\section{System Architecture}
-\label{sec:architecture}
-% ══════════════════════════════════════
+Negative scores indicate that these questions received more downvotes than upvotes, suggesting they were either poorly phrased, highly niche, or genuinely very challenging for the community.
 
-The system is organised into modular components:
+% ══════════════════════════════════════════════════════════════
+% PART VI: METHODOLOGY --- MILESTONE 2
+% ══════════════════════════════════════════════════════════════
+\section{Methodology: Milestone~2 --- Agentic AI Assistant}
+\label{sec:methodology-m2}
+
+\subsection{Objectives}
+
+Milestone~2 extends the ML analytics pipeline into an \textbf{Agentic AI Assessment Design Assistant} that:
+\begin{enumerate}[noitemsep]
+    \item Analyzes question difficulty distribution and identifies learning gaps.
+    \item Retrieves pedagogical and assessment design best practices.
+    \item Generates structured assessment improvement recommendations.
+    \item Handles incomplete or noisy assessment data gracefully.
+    \item Generates new exam questions for weak topics (extension).
+\end{enumerate}
+
+\subsection{LLM Selection: Google Gemini}
+
+We selected \textbf{Google Gemini 2.5 Flash} as our LLM backend because:
+\begin{itemize}[noitemsep]
+    \item It offers a generous \textbf{free-tier API} (satisfying the no-paid-API constraint).
+    \item It supports structured output and long context windows.
+    \item It provides state-of-the-art reasoning capabilities comparable to GPT-4 class models.
+    \item The Python SDK (\texttt{google-generativeai}) is simple to integrate.
+\end{itemize}
+
+\subsection{Agent Architecture}
+
+The \texttt{AssessmentAgent} class (\texttt{scripts/assessment\_agent.py}) implements an agentic workflow with three core components:
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.9\textwidth}{\centering
+\textbf{Milestone~2 Agent Architecture}\\[1em]
+\texttt{Processed DataFrame from M1}\\[0.3em]
+$\downarrow$ \textit{1.\ Data Validation \& Quality Check}\\[0.3em]
+\texttt{Aggregated Statistics + Data Quality Notes}\\[0.3em]
+$\downarrow$ \textit{2.\ Synthetic RAG --- Inject Pedagogical Guidelines}\\[0.3em]
+\texttt{Enriched Prompt Context}\\[0.3em]
+$\downarrow$ \textit{3.\ LLM Generation (Gemini 2.5 Flash)}\\[0.3em]
+\texttt{Structured 6-Section Assessment Report}\\[0.3em]
+$\downarrow$ \textit{Optional: Automated Question Generation}\\[0.3em]
+\texttt{New Exam Question for Weak Topic}
+}}
+\caption{Agentic Assessment Assistant workflow}
+\label{fig:agent-arch}
+\end{figure}
+
+\subsubsection{Component 1: Explicit State Management}
+
+The agent maintains explicit state across interactions:
+
+\begin{lstlisting}[language=Python, caption={Agent state initialisation}]
+self.state = {
+    "is_configured": False,     # API key validated
+    "reports_generated": 0,     # Count of reports produced
+    "last_identified_gaps": []  # Topics from last analysis
+}
+\end{lstlisting}
+
+This state management pattern ensures that:
+\begin{itemize}[noitemsep]
+    \item The agent will not attempt LLM calls without a valid API key.
+    \item Usage can be tracked and rate-limited if needed.
+    \item Context from previous analyses can inform subsequent interactions.
+\end{itemize}
+
+\subsubsection{Component 2: Synthetic Retrieval-Augmented Generation (RAG)}
+
+Rather than using a full vector store (FAISS, Chroma), we implement a \textbf{synthetic RAG} approach where curated pedagogical best practices are stored as a Python dictionary and injected directly into the LLM prompt. This knowledge base contains five established educational principles:
 
 \begin{table}[H]
 \centering
-\caption{System modules and their responsibilities}
-\label{tab:modules}
+\caption{Pedagogical knowledge base entries used for synthetic RAG}
+\label{tab:rag-kb}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Key} & \textbf{Guideline} \\
+\midrule
+\texttt{difficulty\_distribution} & A standard exam should aim for approximately 20\% easy, 60\% medium, and 20\% hard questions to differentiate student ability while maintaining confidence. \\
+\texttt{learning\_gaps} & When students consistently score low on specific topics, it indicates a critical learning gap. Recommend targeted supplementary materials and formative assessment. \\
+\texttt{cognitive\_load} & Avoid unnecessary complexity in question phrasing. Clear, concise language ensures we assess the skill, not reading comprehension. \\
+\texttt{constructive\_alignment} & Ensure exam questions directly align with the stated learning objectives of the course. \\
+\texttt{disclaimer} & This analysis is AI-generated and should serve as an assistive tool, not a definitive authority. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+These guidelines are formatted and injected into every prompt, ensuring the LLM's recommendations are \emph{grounded in established pedagogy} rather than generating unsupported claims.
+
+\subsubsection{Component 3: Data Validation and Noisy Data Handling}
+
+Before generating a report, the agent performs four data quality checks on the input DataFrame:
+
+\begin{enumerate}
+    \item \textbf{Missing titles:} Counts questions where the \texttt{Title} column is \texttt{NaN}.
+    \item \textbf{Missing bodies:} Counts questions where \texttt{question\_body} is \texttt{NaN}.
+    \item \textbf{Zero-score anomaly:} If more than 30\% of questions have a difficulty score of exactly 0, this suggests sparse answer data and is flagged.
+    \item \textbf{Small sample warning:} If the dataset contains fewer than 100 questions, the agent warns that analysis reliability may be limited.
+\end{enumerate}
+
+These quality notes are appended to the data summary and explicitly included in the LLM prompt with the instruction to ``handle gracefully.'' This ensures the generated report acknowledges data limitations rather than presenting potentially misleading conclusions as fact.
+
+\subsection{Structured Report Generation}
+
+The LLM is prompted to generate a report with exactly six sections, matching the project requirements:
+
+\begin{enumerate}
+    \item \textbf{Assessment Quality Summary:} Overall evaluation of exam balance.
+    \item \textbf{Question Difficulty Distribution:} Statistical summary of Easy/Medium/Hard counts.
+    \item \textbf{Identified Learning Gaps:} Topics where students appear to struggle, inferred from the hardest questions.
+    \item \textbf{Recommended Assessment Improvements:} Actionable advice for educators.
+    \item \textbf{Supporting Pedagogical References:} Citations of the RAG-injected guidelines.
+    \item \textbf{Educational and Ethical Disclaimers:} Explicit statement that the analysis is AI-assisted.
+\end{enumerate}
+
+\subsection{Prompt Engineering Strategies}
+
+To reduce unsupported educational claims, the following prompt engineering strategies are employed:
+
+\begin{itemize}
+    \item \textbf{Role assignment:} The LLM is assigned the role of ``expert Educational Assessment Designer and AI Agent.''
+    \item \textbf{Grounding instruction:} ``Avoid making unsupported educational claims outside of the provided guidelines.''
+    \item \textbf{Context injection:} All five pedagogical guidelines are included verbatim in every prompt.
+    \item \textbf{Structured output format:} The prompt specifies the exact six-section format, preventing the model from generating unstructured or tangential content.
+\end{itemize}
+
+\subsection{Extension: Automated Question Generation}
+
+As our chosen extension feature, the system can generate new exam questions on demand. Given a topic name (e.g., ``Dynamic Programming'') and a difficulty level (Easy/Medium/Hard), the agent prompts Gemini to produce:
+
+\begin{enumerate}[noitemsep]
+    \item A question title.
+    \item A detailed problem description with constraints.
+    \item Sample input/output examples.
+    \item A pedagogical justification explaining why the question effectively tests the concept.
+\end{enumerate}
+
+This feature closes the feedback loop: the Assessment Report identifies weak topics $\rightarrow$ the educator uses Automated Question Generation to create targeted questions $\rightarrow$ future exams are better balanced.
+
+% ══════════════════════════════════════════════════════════════
+% PART VII: SYSTEM IMPLEMENTATION
+% ══════════════════════════════════════════════════════════════
+\section{System Implementation}
+\label{sec:implementation}
+
+\subsection{Technology Stack}
+
+\begin{table}[H]
+\centering
+\caption{Technology stack used in the ExamWise system}
+\label{tab:tech-stack}
 \begin{tabular}{lll}
 \toprule
-\textbf{Module} & \textbf{File} & \textbf{Responsibility} \\
+\textbf{Component} & \textbf{Technology} & \textbf{Purpose} \\
 \midrule
-Data Reduction    & \texttt{scripts/data\_reduction.py}      & Subsample raw CSVs \\
-Feature Eng.      & \texttt{scripts/feature\_engineering.py}  & Compute metrics and labels \\
-Model Training    & \texttt{notebooks/model\_training.ipynb}  & Train and evaluate classifier \\
-Web Application   & \texttt{app.py}                           & Streamlit UI \\
-Visualisations    & \texttt{outputs/*.png}                    & Static plots \\
+Programming Language & Python 3.x & Core development language \\
+Data Processing & Pandas, NumPy & DataFrame operations, numerical computation \\
+Machine Learning & Scikit-learn & Vectorisation, classification, evaluation \\
+Visualisation & Matplotlib & Charts and plots \\
+Web Interface & Streamlit & Interactive front-end \\
+Model Serialisation & Joblib & Save/load trained models \\
+LLM Integration & Google Generative AI & Gemini API access \\
+Configuration & python-dotenv & Environment variable management \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Streamlit Application}
-The web interface (\texttt{app.py}) provides:
-\begin{enumerate}[noitemsep]
-    \item \textbf{CSV Upload:} Users upload \texttt{Questions.csv}, \texttt{Answers.csv}, and \texttt{Tags.csv}.
-    \item \textbf{Pipeline Execution:} One-click data reduction, feature engineering, and prediction.
-    \item \textbf{Results Display:} Table of true vs.\ predicted difficulty, performance metrics, and charts.
-\end{enumerate}
+\subsection{Project Structure}
 
-\subsection{Model Persistence}
-The trained model and vectoriser are serialised using \texttt{joblib}~\cite{joblib}:
-\begin{itemize}[noitemsep]
-    \item \texttt{models/model.joblib} --- Logistic Regression classifier (758~KB)
-    \item \texttt{models/vectorizer.joblib} --- CountVectorizer (447~KB)
-    \item \texttt{models/metrics.txt} --- Classification report
-\end{itemize}
-
-% ══════════════════════════════════════
-\section{Discussion}
-\label{sec:discussion}
-% ══════════════════════════════════════
-
-\subsection{Strengths}
-\begin{itemize}[noitemsep]
-    \item End-to-end pipeline from raw data to interactive predictions.
-    \item Modular code design with reusable scripts.
-    \item Clear difficulty labelling formula grounded in engagement metrics.
-    \item Interactive Streamlit interface enabling non-technical users to explore results.
-\end{itemize}
-
-\subsection{Limitations}
-\begin{itemize}[noitemsep]
-    \item \textbf{Class imbalance:} 75\% of questions are labelled \textit{Hard}, causing the model to be biased towards the majority class. Techniques such as SMOTE, class weighting ($\texttt{class\_weight='balanced'}$ in scikit-learn), or threshold tuning should be explored.
-    \item \textbf{Single model:} Only Logistic Regression was trained. Comparing with Decision Trees, Random Forests, or gradient-boosted models would provide a more robust baseline.
-    \item \textbf{Vectorisation:} CountVectorizer captures word presence but ignores word importance. TF--IDF weighting would down-weight common terms and improve discriminative power.
-    \item \textbf{Proxy data:} Stack Overflow engagement metrics are an imperfect proxy for actual exam difficulty. Future work should incorporate real student response data.
-\end{itemize}
-
-% ══════════════════════════════════════
-\section{Future Work}
-\label{sec:future}
-% ══════════════════════════════════════
-
-\begin{enumerate}
-    \item \textbf{Milestone~2:} Integrate TF--IDF vectorisation and train multiple models (Decision Tree, Random Forest, SVM) with hyperparameter tuning.
-    \item \textbf{Class imbalance handling:} Apply SMOTE or adjust class weights.
-    \item \textbf{Advanced NLP:} Experiment with word embeddings (Word2Vec, GloVe) or transformer-based models (BERT) for richer text representations.
-    \item \textbf{Real exam data:} Collect and integrate actual student response data for ground-truth difficulty labels.
-    \item \textbf{Agentic assessment design:} Use the difficulty predictor as part of an agentic system that automatically generates balanced exam papers.
-\end{enumerate}
-
-% ══════════════════════════════════════
-\section{Conclusion}
-\label{sec:conclusion}
-% ══════════════════════════════════════
-
-Milestone~1 of the ExamWise project successfully establishes a working pipeline for question difficulty prediction. Starting from raw Stack Overflow data, the system reduces, processes, and labels 15{,}000 questions using an engagement-based difficulty formula. A Logistic Regression classifier trained on Bag-of-Words features achieves $65.71\%$ accuracy, with strong performance on the majority class but poor recall on minority classes due to data imbalance.
-
-The accompanying Streamlit application provides an accessible interface for uploading data, running the pipeline, and visualising results. While the current baseline has clear limitations---single model, no imbalance correction, simple vectorisation---it provides a solid foundation for the more advanced techniques planned in subsequent milestones.
-
-% ══════════════════════════════════════
-% References
-% ══════════════════════════════════════
-
-\begin{thebibliography}{9}
-
-\bibitem{lord1980applications}
-F.~M. Lord, \textit{Applications of Item Response Theory to Practical Testing Problems}.
-Hillsdale, NJ: Lawrence Erlbaum Associates, 1980.
-
-\bibitem{hambleton1991fundamentals}
-R.~K. Hambleton, H.~Swaminathan, and H.~J. Rogers, \textit{Fundamentals of Item Response Theory}.
-Newbury Park, CA: Sage Publications, 1991.
-
-\bibitem{ha2019automated}
-L.~A. Ha, V.~Yaneva, P.~Baldwin, and J.~Mee, ``Automated estimation of item difficulty for multiple-choice tests: An application of word embedding techniques,'' in \textit{Proc.\ 14th Workshop on Innovative Use of NLP for Building Educational Applications}, 2019, pp.~370--382.
-
-\bibitem{anderson2012discovering}
-A.~Anderson, D.~Huttenlocher, J.~Kleinberg, and J.~Leskovec, ``Discovering value from community activity on focused question answering sites: A case study of Stack Overflow,'' in \textit{Proc.\ 18th ACM SIGKDD Int.\ Conf.\ Knowledge Discovery and Data Mining}, 2012, pp.~850--858.
-
-\bibitem{stacksample}
-Stack Overflow, ``StackSample: 10\% of Stack Overflow Q\&A,'' Kaggle, 2016. [Online]. Available: \url{https://www.kaggle.com/datasets/stackoverflow/stacksample}. [Accessed: Feb.\ 20, 2026].
-
-\bibitem{sklearn}
-F.~Pedregosa \textit{et al.}, ``Scikit-learn: Machine learning in Python,'' \textit{J.\ Machine Learning Research}, vol.~12, pp.~2825--2830, 2011.
-
-\bibitem{joblib}
-Joblib Development Team, ``Joblib: Running Python functions as pipeline jobs.'' [Online]. Available: \url{https://joblib.readthedocs.io/}. [Accessed: Feb.\ 20, 2026].
-
-\end{thebibliography}
-
-% ══════════════════════════════════════
-\newpage
-\appendix
-\section{Project Structure}
-\label{app:structure}
-
-\begin{lstlisting}[language=bash, caption={Repository file structure}]
+\begin{lstlisting}[language=bash, caption={Complete repository file structure}]
 ExamWise/
-  app.py                         # Streamlit application
-  requirements.txt               # Python dependencies
+  app.py                          # Streamlit application (205 lines)
+  requirements.txt                # Python dependencies (8 packages)
+  .env.example                    # API key template
+  .gitignore                      # Excludes data/, venv/, .env
+  README.md                       # Project documentation
+
   scripts/
-    data_reduction.py            # Dataset reduction
-    feature_engineering.py       # Feature computation and labelling
+    data_reduction.py             # Dataset reduction (50 lines)
+    feature_engineering.py        # Feature computation (79 lines)
+    assessment_agent.py           # Agentic AI assistant (128 lines)
+
   models/
-    model.joblib                 # Trained LR classifier
-    vectorizer.joblib            # Fitted CountVectorizer
-    metrics.txt                  # Classification report
+    model.joblib                  # Trained LR classifier (758 KB)
+    vectorizer.joblib             # Fitted CountVectorizer (447 KB)
+    metrics.txt                   # Classification report
+
+  data/                           # (not version-controlled)
+    raw/                          # User-uploaded CSVs
+    reduced/                      # Post-reduction CSVs
+    processed/                    # Final labelled dataset
+
   notebooks/
-    model_training.ipynb         # Training notebook
-  outputs/
-    difficulty_distribution.png  # Difficulty bar chart
-    accuracy_distribution.png    # Accuracy histogram
-    hardest_questions.csv        # Hardest questions table
-  docs/
-    MODEL_CARD.md                # Model documentation
-    problem_statement.md         # Problem definition
-    system_architecture.md       # Architecture overview
-  report/
-    main.tex                     # This report (LaTeX)
-    references.bib               # Bibliography
-    figures/                     # Report figures
+    model_training.ipynb          # EDA and model training
+
+  outputs/                        # Generated visualisations
+  docs/                           # Project documentation
+  report/                         # This LaTeX report
 \end{lstlisting}
 
+\subsection{User Interface Design}
+
+The Streamlit application (\texttt{app.py}) provides a six-section interactive interface:
+
+\begin{table}[H]
+\centering
+\caption{Streamlit UI sections and their functionality}
+\label{tab:ui-sections}
+\begin{tabularx}{\textwidth}{clX}
+\toprule
+\textbf{\#} & \textbf{Section Title} & \textbf{Functionality} \\
+\midrule
+1 & Upload Dataset Files & Three file uploaders for Questions, Answers, Tags CSVs \\
+2 & Run Full Analysis & One-click button executes the entire M1 pipeline \\
+3 & Predicted Difficulty Levels & Data table comparing true vs. predicted labels \\
+4 & Model Performance & Classification report + visual confusion matrix heatmap \\
+4.5 & Student Performance Patterns & Per-question accuracy analysis table \\
+5 & Analytics and Visualisations & Difficulty distribution charts, accuracy histograms \\
+6 & Agentic Assessment Assistant & Report generation button + automated question generator \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The sidebar provides a secure text input for the Gemini API key (type=``password''), and the key can also be loaded from a \texttt{.env} file for convenience.
+
+\subsection{Security Considerations}
+
+\begin{itemize}[noitemsep]
+    \item The \texttt{.env} file containing the API key is excluded from version control via \texttt{.gitignore}.
+    \item A \texttt{.env.example} template is provided so new developers know which variables to configure.
+    \item The Streamlit sidebar uses \texttt{type="password"} to mask the API key input.
+    \item Raw data files (\texttt{data/}) are not committed to the repository.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+% PART VIII: RESULTS --- MILESTONE 2
+% ══════════════════════════════════════════════════════════════
+\section{Results: Milestone~2}
+\label{sec:results-m2}
+
+\subsection{Sample Assessment Report}
+
+When the ``Generate Assessment Design Report'' button is clicked, the agent produces a structured markdown report. Below is a representative excerpt from a test run:
+
+\begin{quote}
+\textit{``The current difficulty distribution (75.2\% Hard, 14.6\% Medium, 10.2\% Easy) deviates significantly from the recommended 20-60-20 ratio. This imbalance suggests that the exam may be overly challenging, potentially discouraging students and failing to properly assess foundational knowledge.''}
+\end{quote}
+
+The agent correctly identified the imbalance using the injected pedagogical guideline and provided actionable recommendations, including increasing the proportion of easy questions and revising question phrasing to reduce extraneous cognitive load.
+
+\subsection{Sample Generated Question}
+
+The Automated Question Generation feature was tested with the topic ``Dynamic Programming'' at difficulty level ``Hard.'' The agent produced a complete question including a problem description, constraints, sample input/output, and a pedagogical justification explaining why the problem effectively tests understanding of optimal substructure and memoisation.
+
+\subsection{Noisy Data Handling Demonstration}
+
+When tested with a small dataset containing missing titles and body text, the agent:
+\begin{enumerate}[noitemsep]
+    \item Detected and reported the number of missing titles and bodies.
+    \item Flagged the small sample size as a reliability concern.
+    \item Generated a report that explicitly acknowledged these limitations.
+    \item Did not crash or produce misleading output.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+% PART IX: DISCUSSION
+% ══════════════════════════════════════════════════════════════
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Strengths}
+
+\begin{enumerate}
+    \item \textbf{End-to-end integration:} The system seamlessly connects data ingestion, ML prediction, AI-powered analysis, and interactive UI in a single application.
+    \item \textbf{Modular architecture:} Each pipeline stage (reduction, engineering, prediction, analysis) is encapsulated in a separate module, enabling independent testing and future improvements.
+    \item \textbf{Pedagogical grounding:} The synthetic RAG approach ensures that AI recommendations are anchored in established educational principles, not hallucinated claims.
+    \item \textbf{Graceful degradation:} The system handles missing data, empty datasets, and absent API keys without crashing, providing informative warnings instead.
+    \item \textbf{Free-tier compliance:} The entire system runs on free-tier services (Gemini Flash, Streamlit Cloud), making it accessible and cost-effective.
+\end{enumerate}
+
+\subsection{Limitations}
+
+\begin{enumerate}
+    \item \textbf{Class imbalance (Milestone~1):} The 75\% Hard class dominance causes the classifier to be heavily biased. Techniques such as SMOTE oversampling, class weight adjustment (\texttt{class\_weight='balanced'}), or stratified sampling should be explored.
+    
+    \item \textbf{Single model baseline:} Only Logistic Regression was trained. Comparing with Decision Trees, Random Forests, SVMs, or gradient-boosted models would provide more robust baselines and potentially better minority-class performance.
+    
+    \item \textbf{Simple vectorisation:} CountVectorizer captures word presence but ignores word importance. TF-IDF weighting or contextual embeddings (BERT) would improve discriminative power.
+    
+    \item \textbf{Proxy difficulty labels:} Stack Overflow engagement metrics are an imperfect proxy for actual exam difficulty. Real student response data would provide more accurate ground-truth labels.
+    
+    \item \textbf{LLM dependency:} The Milestone~2 agent requires an active internet connection and a valid API key. Offline operation is not supported.
+    
+    \item \textbf{Synthetic vs.\ full RAG:} The hardcoded knowledge base is limited to five guidelines. A full vector-store RAG system with a larger pedagogical corpus would improve the depth and specificity of recommendations.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+% PART X: FUTURE WORK
+% ══════════════════════════════════════════════════════════════
+\section{Future Work}
+\label{sec:future}
+
+\begin{enumerate}
+    \item \textbf{Advanced NLP models:} Replace CountVectorizer with TF-IDF or pre-trained transformer models (e.g., BERT, DistilBERT) for richer text representations that capture semantic meaning.
+    
+    \item \textbf{Class imbalance handling:} Apply SMOTE, ADASYN, or adjust \texttt{class\_weight} in scikit-learn to improve minority class recall.
+    
+    \item \textbf{Multi-model comparison:} Train and evaluate Decision Trees, Random Forests, SVM, and XGBoost classifiers to identify the best-performing model.
+    
+    \item \textbf{Full RAG pipeline:} Integrate a vector store (Chroma or FAISS) with a comprehensive pedagogical knowledge base sourced from education research papers.
+    
+    \item \textbf{LangGraph agent:} Migrate the agentic workflow to LangGraph for more sophisticated multi-step reasoning with tool use capabilities.
+    
+    \item \textbf{Real exam data:} Partner with educational institutions to collect actual student response data for ground-truth difficulty calibration.
+    
+    \item \textbf{PDF export:} Implement PDF generation of the assessment report for formal documentation.
+    
+    \item \textbf{Multi-exam comparative analysis:} Enable side-by-side comparison of multiple exam datasets to track assessment quality trends over time.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+% PART XI: CONCLUSION
+% ══════════════════════════════════════════════════════════════
+\section{Conclusion}
+\label{sec:conclusion}
+
+This project demonstrates that combining classical machine learning with modern generative AI creates a powerful, practical tool for educational assessment design.
+
+\textbf{Milestone~1} established a complete data pipeline from raw Stack Overflow data to difficulty predictions, achieving $65.71\%$ accuracy with a Logistic Regression baseline. While limited by class imbalance and simple vectorisation, it provides a functional foundation and clearly identifies the challenges inherent in automated difficulty estimation.
+
+\textbf{Milestone~2} transformed these quantitative predictions into qualitative, actionable insights using a stateful Gemini-powered agent. By injecting pedagogical guidelines via synthetic RAG and implementing robust noisy data handling, the system produces trustworthy, grounded recommendations that respect the boundaries of AI-assisted analysis. The Automated Question Generation extension closes the assessment improvement loop, enabling educators to immediately create targeted content for identified weak areas.
+
+Together, the two milestones deliver a complete assessment lifecycle tool---from retrospective analysis of past exams to proactive design of future ones---accessible through a clean, interactive Streamlit interface and deployable on free-tier cloud platforms.
+
+% ══════════════════════════════════════════════════════════════
+% REFERENCES
+% ══════════════════════════════════════════════════════════════
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+% ══════════════════════════════════════════════════════════════
+\newpage
+\appendix
+
+% ──────────────────────────────────────
+\section{Key Code Listings}
+\label{app:code}
+
+\subsection{Difficulty Score Computation}
+\begin{lstlisting}[language=Python, caption={Core difficulty scoring logic from \texttt{feature\_engineering.py}}]
+# difficulty_score = 1 - (max_answer_score / (max_answer_score + answer_count + 1))
+df['difficulty_score'] = 1 - (
+    df['max_answer_score'] / 
+    (df['max_answer_score'] + df['answer_count'] + 1)
+)
+
+# Normalize between 0 and 1
+ds_min = df['difficulty_score'].min()
+ds_max = df['difficulty_score'].max()
+if ds_max > ds_min:
+    df['difficulty_score'] = (df['difficulty_score'] - ds_min) / (ds_max - ds_min)
+else:
+    df['difficulty_score'] = 0.5  # Fallback
+
+# Categorize
+def categorize(score):
+    if score < 0.33: return 'easy'
+    elif score < 0.66: return 'medium'
+    return 'hard'
+
+df['difficulty_label'] = df['difficulty_score'].apply(categorize)
+\end{lstlisting}
+
+\subsection{Agent Prompt Construction}
+\begin{lstlisting}[language=Python, caption={Prompt template for assessment report generation}]
+prompt = f"""
+You are an expert Educational Assessment Designer and AI Agent.
+Your task is to analyze the following assessment data and generate 
+a structured assessment design report.
+
+{kb_context}  # Injected pedagogical guidelines (RAG)
+
+Data Summary:
+{data_summary}  # Aggregated metrics + quality flags
+
+Requirements for the report:
+1. Assessment Quality Summary
+2. Question Difficulty Distribution
+3. Identified Learning Gaps
+4. Recommended Assessment Improvements
+5. Supporting Pedagogical References
+6. Educational and Ethical Disclaimers
+
+Avoid making unsupported educational claims outside of the 
+provided guidelines.
+"""
+\end{lstlisting}
+
+% ──────────────────────────────────────
 \section{Team Contributions}
 \label{app:contributions}
 
 \begin{table}[H]
 \centering
-\caption{Role-wise work allocation for Milestone~1}
-\begin{tabular}{lp{8cm}}
+\caption{Role-wise work allocation across both milestones}
+\begin{tabularx}{\textwidth}{lX}
 \toprule
 \textbf{Role} & \textbf{Contributions} \\
 \midrule
-Person~1 (Data \& Labelling) & Dataset acquisition, data reduction script, feature engineering, difficulty labelling, processed CSV export \\
-Person~2 (Features \& Models) & Model training, CountVectorizer pipeline, Logistic Regression classifier, evaluation metrics, model serialisation \\
-Person~3 (Analytics \& Visualisations) & Difficulty distribution charts, accuracy analysis, hardest questions identification, output generation \\
-Person~4 (App \& Integration) & Streamlit application, README documentation, requirements specification, Git management \\
+Person~1 (Data Pipeline) & Dataset acquisition, data reduction script, chunked CSV reading, referential integrity logic, processed CSV export \\
+Person~2 (ML \& NLP) & Feature engineering, difficulty scoring formula, CountVectorizer pipeline, Logistic Regression training, model evaluation, confusion matrix \\
+Person~3 (AI Agent) & Gemini API integration, AssessmentAgent class, synthetic RAG knowledge base, prompt engineering, noisy data validation, automated question generation \\
+Person~4 (UI \& Integration) & Streamlit application, sidebar configuration, UI layout, visualisation integration, documentation, Git management, deployment \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \end{document}
